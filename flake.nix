@@ -14,25 +14,32 @@
         pkgs = import nixpkgs {
           inherit system overlays;
         };
-        cr = pkgs.writeShellScriptBin "cr" ''
+        check = pkgs.writeShellScriptBin "check" ''
+          cargo clippy --tests
+        '';
+        run = pkgs.writeShellScriptBin "run" ''
           cargo run
         '';
-        ct = pkgs.writeShellScriptBin "ct" ''
+        test = pkgs.writeShellScriptBin "test" ''
           cargo test
         '';
-        cw = pkgs.writeShellScriptBin "cw" ''
-          ${pkgs.watchexec} -e rs -r cargo run
+        watch = pkgs.writeShellScriptBin "watch" ''
+          ${pkgs.watchexec}/bin/watchexec -e rs -r cargo run
         '';
       in
       with pkgs;
       {
         devShells.default = mkShell {
           buildInputs = [
-            cr
-            ct
-            cw
+            check
             pkg-config
+            postgresql_17_jit
+            sqlx-cli
+            run
             taplo
+            test
+            watch
+            (import ./scripts/init.nix { inherit pkgs; })
             (rust-bin.stable.latest.default.override {
               extensions = [ "rust-analyzer" "rust-src" ];
             })
