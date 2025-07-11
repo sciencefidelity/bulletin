@@ -1,9 +1,64 @@
+use std::sync::LazyLock;
+
 use anyhow::Result;
 use bulletin::configuration::{self, DatabaseSettings};
+use bulletin::telemetry::{Formatter, get_subscriber, init_subscriber};
 use reqwest::{StatusCode, header::CONTENT_TYPE};
 use sqlx::{Connection, Executor, PgConnection, PgPool};
 use uuid::Uuid;
 
+static TRACING: LazyLock<()> = LazyLock::new(|| {
+    let default_log_level = "info".to_owned();
+    let subscriber_name = "test".to_owned();
+    if std::env::var("TEST_LOG").is_ok() {
+        let subscriber = get_subscriber(
+            subscriber_name,
+            default_log_level,
+            &Formatter::Bunyan,
+            std::io::stdout,
+        );
+        init_subscriber(subscriber);
+    } else {
+        let subscriber = get_subscriber(
+            subscriber_name,
+            default_log_level,
+            &Formatter::Bunyan,
+            std::io::sink,
+        );
+        init_subscriber(subscriber);
+    }
+});
+
+pub struct TestApp {
+    pub address: String,
+    pub db_pool: PgPool,
+}
+
+async fn spawn_app() -> Result<TestApp> {
+    LazyLock::force(&TRACING);
+
+    let mut configuration = configuration::get()?;
+    configuration.database.name = Uuid::new_v4().to_string();
+    let db_pool = configure_database(&configuration.database).await?;
+
+    let (listener, router) = bulletin::run("127.0.0.1:0", db_pool.clone())?;
+    let port = listener.local_addr()?.port();
+    let address = format!("http://127.0.0.1:{port}");
+
+    let server = axum_server::from_tcp(listener).serve(router.into_make_service());
+    tokio::spawn(server);
+    Ok(TestApp { address, db_pool })
+}
+
+async fn configure_database(config: &DatabaseSettings) -> Result<PgPool> {
+    let mut connection = PgConnection::connect_with(&config.without_db()).await?;
+    connection
+        .execute(format!(r#"CREATE DATABASE "{}";"#, config.name).as_str())
+        .await?;
+    let connection_pool = PgPool::connect_with(config.with_db()).await?;
+    sqlx::migrate!("./migrations").run(&connection_pool).await?;
+    Ok(connection_pool)
+}
 #[tokio::test]
 async fn health_check_works() -> Result<()> {
     let app = spawn_app().await?;
@@ -68,31 +123,4 @@ async fn subscribe_returns_a_422_when_data_is_missing() -> Result<()> {
     }
 
     Ok(())
-}
-
-pub struct TestApp {
-    pub address: String,
-    pub db_pool: PgPool,
-}
-
-async fn spawn_app() -> Result<TestApp> {
-    let mut configuration = configuration::get()?;
-    configuration.database.name = Uuid::new_v4().to_string();
-    let db_pool = configure_database(&configuration.database).await?;
-    let (listener, router) = bulletin::run("127.0.0.1:0", db_pool.clone())?;
-    let port = listener.local_addr()?.port();
-    let address = format!("http://127.0.0.1:{port}");
-    let server = axum_server::from_tcp(listener).serve(router.into_make_service());
-    tokio::spawn(server);
-    Ok(TestApp { address, db_pool })
-}
-
-async fn configure_database(config: &DatabaseSettings) -> Result<PgPool> {
-    let mut connection = PgConnection::connect(&config.connection_string_without_db()).await?;
-    connection
-        .execute(format!(r#"CREATE DATABASE "{}";"#, config.name).as_str())
-        .await?;
-    let connection_pool = PgPool::connect(&config.connection_string()).await?;
-    sqlx::migrate!("./migrations").run(&connection_pool).await?;
-    Ok(connection_pool)
 }

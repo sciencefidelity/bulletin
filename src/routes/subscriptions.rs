@@ -1,10 +1,9 @@
-use std::ops::DerefMut;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use axum::{Form, extract::State, http::StatusCode};
 use serde::Deserialize;
 use sqlx::PgPool;
-use sqlx::{Executor, PgConnection, types::chrono::Utc};
+use sqlx::types::chrono::Utc;
 use uuid::Uuid;
 
 #[derive(Deserialize)]
@@ -13,11 +12,27 @@ pub struct FormData {
     name: String,
 }
 
+#[tracing::instrument(
+    name = "adding a new subscriber",
+    skip_all,
+    fields(
+        subscriber_email = %form.email,
+        subscriber_name = %form.name
+    )
+)]
 pub async fn post_subscriptions(
     State(pool): State<Arc<PgPool>>,
     Form(form): Form<FormData>,
 ) -> StatusCode {
-    match sqlx::query!(
+    match insert_subscriber(&pool, &form).await {
+        Ok(()) => StatusCode::OK,
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR,
+    }
+}
+
+#[tracing::instrument(name = "saving new subscriber details in the database", skip_all)]
+pub async fn insert_subscriber(pool: &PgPool, form: &FormData) -> Result<(), sqlx::Error> {
+    sqlx::query!(
         r#"
         INSERT INTO subscriptions (id, email, name, subscribed_at)
         VALUES ($1, $2, $3, $4)
@@ -27,13 +42,11 @@ pub async fn post_subscriptions(
         form.name,
         Utc::now()
     )
-    .execute(pool.as_ref())
+    .execute(pool)
     .await
-    {
-        Ok(_) => StatusCode::OK,
-        Err(e) => {
-            println!("failed to execute query: {e}");
-            StatusCode::INTERNAL_SERVER_ERROR
-        }
-    }
+    .map_err(|e| {
+        tracing::error!("failed to execute query: {e:?}");
+        e
+    })?;
+    Ok(())
 }

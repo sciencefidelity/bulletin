@@ -31,6 +31,7 @@
       {
         devShells.default = mkShell {
           buildInputs = [
+            bunyan-rs
             check
             pkg-config
             postgresql_17_jit
