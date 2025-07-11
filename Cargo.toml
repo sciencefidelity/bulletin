@@ -43,7 +43,9 @@ tracing-bunyan-formatter = "0.3"
 tracing-log = "0.2"
 tracing-opentelemetry = "0.31"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "registry"] }
+unicode-segmentation = "1"
 uuid = { version = "1", features = ["v4"] }
+validator = "0.20"
 
 [dependencies.sqlx]
 version = "0.8"
@@ -65,6 +67,11 @@ features = ["macros", "rt-multi-thread"]
 [dev-dependencies]
 anyhow = "1.0.98"
 axum-server = "0.7"
+claims = "0.8"
+fake = "4"
+quickcheck = "1"
+quickcheck_macros = "1"
+rand = "0.9"
 sqlx = { version = "0.8", default-features = false, features = ["migrate"] }
 
 [dev-dependencies.reqwest]
