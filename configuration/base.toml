@@ -1,0 +1,9 @@
+[application]
+port = 8080
+
+[database]
+username = "postgres"
+host = "192.168.1.125"
+port = 5432
+password = "password"
+name = "bulletin"
