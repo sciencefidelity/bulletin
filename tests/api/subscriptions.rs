@@ -136,7 +136,7 @@ async fn subscribe_fails_if_there_is_a_fatal_database_error() -> Result<()> {
         .execute(&app.db_pool)
         .await?;
 
-    let response = app.post_subscriptions(body.into()).await?;
+    let response = app.post_subscriptions(body).await?;
 
     assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
 
