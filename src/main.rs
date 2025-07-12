@@ -1,6 +1,5 @@
 use bulletin::telemetry::{Formatter, get_subscriber, init_subscriber};
-use bulletin::{configuration, run};
-use sqlx::PgPool;
+use bulletin::{Application, configuration};
 
 #[tokio::main]
 async fn main() -> Result<(), std::io::Error> {
@@ -15,13 +14,6 @@ async fn main() -> Result<(), std::io::Error> {
     init_subscriber(subscriber);
 
     let configuration = configuration::get().expect("failed to read configuration");
-    let connection_pool = PgPool::connect_lazy_with(configuration.database.with_db());
-    let address = format!(
-        "{}:{}",
-        configuration.application.host, configuration.application.port
-    );
-    let (listener, router) = run(address.as_str(), connection_pool)?;
-    listener.set_nonblocking(true)?;
-    let listener = tokio::net::TcpListener::from_std(listener)?;
-    axum::serve(listener, router).await
+    let application = Application::build(configuration)?;
+    application.run_until_stopped().await
 }

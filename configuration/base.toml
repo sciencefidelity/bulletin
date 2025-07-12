@@ -1,6 +1,7 @@
 [application]
 port = 8080
 host = "0.0.0.0"
+base_url = "http://127.0.0.1"
 
 [database]
 username = "postgres"
@@ -9,3 +10,9 @@ port = 5432
 password = "password"
 name = "bulletin"
 require_ssl = false
+
+[email_client]
+base_url = "localhost"
+sender_email = "test@gmail.com"
+authorization_token = "my-secret-token"
+timeout_milliseconds = 10000
