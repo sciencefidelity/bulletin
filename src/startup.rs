@@ -3,9 +3,15 @@ use std::net::TcpListener;
 use std::sync::Arc;
 
 use axum::Router;
+// use axum::http::Request;
 use axum::routing::{get, post};
 use sqlx::PgPool;
 use sqlx::postgres::PgPoolOptions;
+// use tower::ServiceBuilder;
+// use tower_http::ServiceBuilderExt;
+// use tower_http::request_id::{MakeRequestId, RequestId};
+// use tower_http::trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer};
+// use uuid::Uuid;
 
 use crate::configuration::{DatabaseSettings, Settings};
 use crate::routes::{get_confirm, get_health, post_subscriptions};
@@ -37,7 +43,7 @@ impl Application {
         let email_client = EmailClient::new(
             configuration.email_client.base_url,
             sender_email,
-            configuration.email_client.authorization_token,
+            configuration.email_client.api_token,
             timeout,
         );
 
@@ -47,10 +53,20 @@ impl Application {
             base_url: configuration.application.base_url,
         });
 
+        // let svc = ServiceBuilder::new()
+        //     .set_x_request_id(MakeRequestUuid)
+        //     .layer(
+        //         TraceLayer::new_for_http()
+        //             .make_span_with(DefaultMakeSpan::new().include_headers(true))
+        //             .on_response(DefaultOnResponse::new().include_headers(true)),
+        //     )
+        //     .propagate_x_request_id();
+
         let mut router = Router::new()
             .route("/health", get(get_health))
             .route("/subscriptions", post(post_subscriptions))
             .route("/subscriptions/confirm", get(get_confirm))
+            // .layer(svc)
             .with_state(shared_state);
 
         router = tracing_layer(router);
@@ -88,3 +104,15 @@ impl Application {
 pub fn get_connection_pool(configuration: &DatabaseSettings) -> PgPool {
     PgPoolOptions::new().connect_lazy_with(configuration.with_db())
 }
+
+// #[derive(Clone)]
+// struct MakeRequestUuid;
+//
+// impl MakeRequestId for MakeRequestUuid {
+//     fn make_request_id<B>(&mut self, _request: &Request<B>) -> Option<RequestId> {
+//         let request_id = Uuid::new_v4().to_string();
+//         Some(RequestId::new(
+//             request_id.parse().expect("failed to parse request uuid"),
+//         ))
+//     }
+// }

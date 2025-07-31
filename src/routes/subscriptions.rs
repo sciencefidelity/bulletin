@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
-use axum::{Form, extract::State, http::StatusCode};
+use axum::response::IntoResponse;
+use axum::{Form, extract::State};
 use rand::Rng;
 use rand::distr::Alphanumeric;
 use serde::Deserialize;
@@ -10,6 +11,7 @@ use uuid::Uuid;
 
 use crate::EmailClient;
 use crate::domain::{NewSubscriber, SubscriberEmail, SubscriberName};
+use crate::error::{HttpError, Result};
 use crate::startup::AppState;
 
 #[derive(Deserialize)]
@@ -19,51 +21,53 @@ pub struct FormData {
 }
 
 #[tracing::instrument(
-    name = "adding a new subscriber",
+    name = "POST - new subscription",
     skip_all,
-    fields(
-        subscriber_email = %form.email,
-        subscriber_name = %form.name
-    )
+    fields(email = %form.email)
 )]
 pub async fn post_subscriptions(
     State(state): State<Arc<AppState>>,
     Form(form): Form<FormData>,
-) -> StatusCode {
-    let Ok(new_subscriber) = form.try_into() else {
-        return StatusCode::BAD_REQUEST;
-    };
-    let Ok(mut transaction) = state.db_pool.begin().await else {
-        return StatusCode::INTERNAL_SERVER_ERROR;
-    };
-    let Ok(subscriber_id) = insert_subscriber(&mut transaction, &new_subscriber).await else {
-        return StatusCode::INTERNAL_SERVER_ERROR;
-    };
-    let subscription_token = generate_subscription_token();
-    if store_token(&mut transaction, subscriber_id, &subscription_token)
+) -> Result<impl IntoResponse> {
+    let new_subscriber = form.try_into().map_err(|e| HttpError::ValidationError(e))?;
+
+    let mut transaction = state
+        .db_pool
+        .begin()
         .await
-        .is_err()
-    {
-        return StatusCode::INTERNAL_SERVER_ERROR;
-    }
-    if transaction.commit().await.is_err() {
-        return StatusCode::INTERNAL_SERVER_ERROR;
-    }
-    if send_confirmation_email(
+        .map_err(|e| HttpError::DatabaseError(e))?;
+
+    let subscriber_id = insert_subscriber(&mut transaction, &new_subscriber)
+        .await
+        .map_err(|e| HttpError::DatabaseError(e))?;
+
+    let subscription_token = generate_subscription_token();
+    store_token(&mut transaction, subscriber_id, &subscription_token)
+        .await
+        .map_err(|e| HttpError::DatabaseError(e))?;
+
+    transaction
+        .commit()
+        .await
+        .map_err(|e| HttpError::DatabaseError(e))?;
+
+    send_confirmation_email(
         &state.email_client,
         new_subscriber,
         &state.base_url,
         &subscription_token,
     )
     .await
-    .is_err()
-    {
-        return StatusCode::INTERNAL_SERVER_ERROR;
-    }
-    StatusCode::OK
+    .map_err(|_| HttpError::UnexpectedError)?;
+
+    Ok(())
 }
 
-#[tracing::instrument(name = "saving new subscriber details in the database", skip_all)]
+#[tracing::instrument(
+    name = "writing new subscriber to the database",
+    skip_all,
+    fields(email = %new_subscriber.email.as_ref())
+)]
 pub async fn insert_subscriber(
     transaction: &mut Transaction<'_, Postgres>,
     new_subscriber: &NewSubscriber,
@@ -80,13 +84,13 @@ pub async fn insert_subscriber(
         Utc::now()
     );
     transaction.execute(query).await.map_err(|e| {
-        tracing::error!("failed to execute query: {e:?}");
+        tracing::error!("execute insert_subscriber: {e:?}");
         e
     })?;
     Ok(subscriber_id)
 }
 
-#[tracing::instrument(name = "store subscription token in the database", skip_all)]
+#[tracing::instrument(name = "writing subscription token to the database", skip_all)]
 pub async fn store_token(
     transaction: &mut Transaction<'_, Postgres>,
     subscriber_id: Uuid,
@@ -99,13 +103,13 @@ pub async fn store_token(
         subscriber_id
     );
     transaction.execute(query).await.map_err(|e| {
-        tracing::error!("failed to execute query: {e:?}");
+        tracing::error!("execute store_token: {e:?}");
         e
     })?;
     Ok(())
 }
 
-#[tracing::instrument(name = "send a confirmation email to a new subscriber", skip_all)]
+#[tracing::instrument(name = "sending a confirmation email", skip_all)]
 pub async fn send_confirmation_email(
     email_client: &EmailClient,
     new_subscriber: NewSubscriber,

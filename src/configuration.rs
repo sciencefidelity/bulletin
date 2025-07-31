@@ -57,7 +57,7 @@ impl DatabaseSettings {
 pub struct EmailClientSettings {
     pub base_url: String,
     pub sender_email: String,
-    pub authorization_token: SecretString,
+    pub api_token: SecretString,
     pub timeout_milliseconds: u64,
 }
 

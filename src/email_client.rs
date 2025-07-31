@@ -18,14 +18,14 @@ pub struct EmailClient {
     http_client: reqwest::Client,
     base_url: String,
     sender: SubscriberEmail,
-    authorization_token: SecretString,
+    api_token: SecretString,
 }
 
 impl EmailClient {
     pub fn new(
         base_url: String,
         sender: SubscriberEmail,
-        authorization_token: SecretString,
+        api_token: SecretString,
         timeout: std::time::Duration,
     ) -> Self {
         Self {
@@ -35,10 +35,15 @@ impl EmailClient {
                 .expect("failed to build email client"),
             base_url,
             sender,
-            authorization_token,
+            api_token,
         }
     }
 
+    #[tracing::instrument(
+        name = "sending a confirmation email with postmark",
+        skip_all,
+        fields(sender = %self.sender.as_ref(), recipient)
+    )]
     pub async fn send_email(
         &self,
         recipient: SubscriberEmail,
@@ -56,10 +61,7 @@ impl EmailClient {
         };
         self.http_client
             .post(&url)
-            .header(
-                "X-Postmark-Server-Token",
-                self.authorization_token.expose_secret(),
-            )
+            .header("X-Postmark-Server-Token", self.api_token.expose_secret())
             .json(&request_body)
             .send()
             .await?

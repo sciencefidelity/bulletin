@@ -1,11 +1,12 @@
 use std::sync::Arc;
 
 use axum::extract::{Query, State};
-use axum::http::StatusCode;
+use axum::response::IntoResponse;
 use serde::Deserialize;
 use sqlx::PgPool;
 use uuid::Uuid;
 
+use crate::error::{HttpError, Result};
 use crate::startup::AppState;
 
 #[derive(Deserialize)]
@@ -17,21 +18,23 @@ pub struct Parameters {
 pub async fn get_confirm(
     State(state): State<Arc<AppState>>,
     Query(params): Query<Parameters>,
-) -> StatusCode {
-    let Ok(id) = get_subscriber_id_from_token(&state.db_pool, &params.subscription_token).await
-    else {
-        return StatusCode::INTERNAL_SERVER_ERROR;
-    };
+) -> Result<impl IntoResponse> {
+    let id = get_subscriber_id_from_token(&state.db_pool, &params.subscription_token)
+        .await
+        .map_err(|e| HttpError::DatabaseError(e))?;
+
     match id {
-        None => StatusCode::UNAUTHORIZED,
+        None => {
+            return Err(HttpError::AuthorizationError(
+                "no matching subscriber id for provided token".into(),
+            ))?;
+        }
         Some(subscriber_id) => {
-            if confirm_subscriber(&state.db_pool, subscriber_id)
+            confirm_subscriber(&state.db_pool, subscriber_id)
                 .await
-                .is_err()
-            {
-                return StatusCode::INTERNAL_SERVER_ERROR;
-            }
-            StatusCode::OK
+                .map_err(|e| HttpError::DatabaseError(e))?;
+
+            Ok(())
         }
     }
 }

@@ -1,8 +1,19 @@
+// use std::io::IsTerminal;
+
 use bulletin::telemetry::{Formatter, get_subscriber, init_subscriber};
 use bulletin::{Application, configuration};
 
 #[tokio::main]
 async fn main() -> Result<(), std::io::Error> {
+    // color_eyre::config::HookBuilder::default()
+    //     .theme(if !std::io::stderr().is_terminal() {
+    //         color_eyre::config::Theme::new()
+    //     } else {
+    //         color_eyre::config::Theme::dark()
+    //     })
+    //     .install()
+    //     .unwrap();
+
     const PACKAGE_NAME: &str = env!("CARGO_PKG_NAME");
 
     let subscriber = get_subscriber(

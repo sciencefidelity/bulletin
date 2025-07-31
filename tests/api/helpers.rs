@@ -17,7 +17,7 @@ static TRACING: LazyLock<()> = LazyLock::new(|| {
         let subscriber = get_subscriber(
             subscriber_name,
             default_log_level,
-            &Formatter::Bunyan,
+            &Formatter::Log,
             std::io::stdout,
         );
         init_subscriber(subscriber);
@@ -25,7 +25,7 @@ static TRACING: LazyLock<()> = LazyLock::new(|| {
         let subscriber = get_subscriber(
             subscriber_name,
             default_log_level,
-            &Formatter::Bunyan,
+            &Formatter::Log,
             std::io::sink,
         );
         init_subscriber(subscriber);
