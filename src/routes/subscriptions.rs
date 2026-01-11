@@ -29,27 +29,27 @@ pub async fn post_subscriptions(
     State(state): State<Arc<AppState>>,
     Form(form): Form<FormData>,
 ) -> Result<impl IntoResponse> {
-    let new_subscriber = form.try_into().map_err(|e| HttpError::ValidationError(e))?;
+    let new_subscriber = form.try_into().map_err(HttpError::ValidationError)?;
 
     let mut transaction = state
         .db_pool
         .begin()
         .await
-        .map_err(|e| HttpError::DatabaseError(e))?;
+        .map_err(HttpError::DatabaseError)?;
 
     let subscriber_id = insert_subscriber(&mut transaction, &new_subscriber)
         .await
-        .map_err(|e| HttpError::DatabaseError(e))?;
+        .map_err(HttpError::DatabaseError)?;
 
     let subscription_token = generate_subscription_token();
     store_token(&mut transaction, subscriber_id, &subscription_token)
         .await
-        .map_err(|e| HttpError::DatabaseError(e))?;
+        .map_err(HttpError::DatabaseError)?;
 
     transaction
         .commit()
         .await
-        .map_err(|e| HttpError::DatabaseError(e))?;
+        .map_err(HttpError::DatabaseError)?;
 
     send_confirmation_email(
         &state.email_client,

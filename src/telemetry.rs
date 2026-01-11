@@ -58,21 +58,26 @@ pub fn tracing_layer(router: Router) -> Router {
 
 fn trace_layer_make_span_with(request: &Request<Body>) -> Span {
     let request_id = Uuid::new_v4().to_string();
+    let source = request
+        .extensions()
+        .get::<ConnectInfo<SocketAddr>>()
+        .map_or_else(
+            || tracing::field::display(String::from("<unknown>")),
+            |connect_info| tracing::field::display(connect_info.ip().to_string()),
+        );
+
     tracing::info_span!("request",
         %request_id,
         uri = %request.uri(),
         method = %request.method(),
-        source = request.extensions()
-            .get::<ConnectInfo<SocketAddr>>()
-            .map(|connect_info| tracing::field::display(connect_info.ip().to_string()))
-            .unwrap_or_else(|| tracing::field::display(String::from("<unknown>"))),
+        %source,
         status = tracing::field::Empty,
         latency = tracing::field::Empty,
     )
 }
 
 fn trace_layer_on_request(_request: &Request<Body>, _span: &Span) {
-    tracing::trace!("Got request")
+    tracing::trace!("Got request");
 }
 
 fn trace_layer_on_response(response: &Response<Body>, latency: Duration, span: &Span) {
@@ -125,7 +130,7 @@ fn otlp_subscriber(filter_layer: EnvFilter, name: String) -> impl Subscriber + S
         .with_http()
         .with_protocol(Protocol::HttpBinary)
         .build()
-        .unwrap();
+        .expect("building otel subscriber");
 
     let provider = opentelemetry_sdk::trace::SdkTracerProvider::builder()
         .with_simple_exporter(exporter)

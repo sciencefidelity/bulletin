@@ -17,6 +17,9 @@
         check = pkgs.writeShellScriptBin "check" ''
           cargo clippy --tests
         '';
+        coverage = pkgs.writeShellScriptBin "coverage" ''
+          cargo llvm-cov --html
+        '';
         run = pkgs.writeShellScriptBin "run" ''
           cargo run
         '';
@@ -33,24 +36,26 @@
           buildInputs = [
             bunyan-rs
             check
+            coverage
             pkg-config
-            postgresql_17_jit
-            sqlx-cli
+            postgresql
             run
+            sqlx-cli
+            sqruff
             taplo
             test
             watch
             (import ./scripts/init.nix { inherit pkgs; })
             (rust-bin.stable.latest.default.override {
-              extensions = [ "rust-analyzer" "rust-src" ];
+              extensions = [ "llvm-tools-preview" "rust-analyzer" "rust-src" ];
             })
-          ];
+          ] ++ (if pkgs.stdenv.isLinux then [ pkgs.cargo-llvm-cov pkgs.clang pkgs.mold ] else [ ]);
 
           shellHook = /*bash*/ ''
           ''
           # enable mold linker for Linux
           + pkgs.lib.optionalString pkgs.stdenv.isLinux /*bash*/ ''
-            export RUSTFLAGS="-C linker=clang -C link-arg=-fuse-ld=${pkgs.mold-wrapped}/bin/mold"
+            export RUSTFLAGS="-C linker=clang -C link-arg=-fuse-ld=${pkgs.mold}/bin/mold"
           '';
         };
       }

@@ -1,6 +1,5 @@
-use axum::Json;
-use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
+use axum::{Json, http::StatusCode};
 use serde_json::json;
 
 pub type Result<T, E = Report> = color_eyre::Result<T, E>;
@@ -65,11 +64,12 @@ impl HttpError {
     pub fn response(&self) -> Response {
         let (status, message) = match self {
             Self::ValidationError(_) => (StatusCode::BAD_REQUEST, "VALIDATION_ERROR"),
-            Self::DatabaseError(_) => (StatusCode::INTERNAL_SERVER_ERROR, "SERVICE_ERROR"),
+            Self::DatabaseError(_) | Self::UnexpectedError => {
+                (StatusCode::INTERNAL_SERVER_ERROR, "SERVICE_ERROR")
+            }
             Self::AuthorizationError(_) => (StatusCode::UNAUTHORIZED, "AUTHORIZATION_ERROR"),
             Self::NotFound => (StatusCode::NOT_FOUND, "NOT_FOUND"),
             Self::Conflict(_) => (StatusCode::CONFLICT, "CONFLICT"),
-            Self::UnexpectedError => (StatusCode::INTERNAL_SERVER_ERROR, "SERVICE_ERROR"),
         };
 
         let client_body_error = json!({

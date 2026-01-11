@@ -1,0 +1,18 @@
+[sqruff]
+dialect = postgres
+max_line_length = 100
+
+[sqruff:rules:capitalisation.keywords]
+capitalisation_policy = upper
+
+[sqruff:rules:capitalisation.identifiers]
+extended_capitalisation_policy = lower
+
+[sqruff:rules:capitalisation.functions]
+extended_capitalisation_policy = upper
+
+[sqruff:rules:capitalisation.literals]
+capitalisation_policy = upper
+
+[sqruff:rules:capitalisation.types]
+extended_capitalisation_policy = upper
